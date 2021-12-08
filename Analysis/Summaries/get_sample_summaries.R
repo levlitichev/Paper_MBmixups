@@ -1,21 +1,32 @@
 # get summaries for each MB sample against all DNA samples, one chr
+library(stringr)
 
-snpcalls_dir <- "../SnpCalls"
-readcounts_dir <- "../Readcounts"
-
-chr <- SUB
+snpcalls_dir <- "SnpCalls"
+readcounts_dir <- "Readcounts"
+chr <- "13"
 
 # load the corresponding imputed SNPs for that chromosome
-load(paste0(snpcalls_dir, "/imp_snp_", chr, "_modified.RData"))
-snpinfo$pos_bp <- round(snpinfo$pos_Mbp * 1e6)
+load(paste0(snpcalls_dir, "/imp_snp_", chr, ".RData")) # loads as `imp_snps`
+# snpinfo$pos_bp <- round(snpinfo$pos_Mbp * 1e6)
+
+# CRITICAL CHANGE!
+# I used allele probabilities, rather than genotype probabilities,
+# in obtain_snp_calls.R, so I need to modify my imp_snps object for it to work below:
+# -- 2 becomes 3 (homozygous for minor allele)
+# -- NA becomes 2 (heterozygous)
+# -- 1 stays as 1 (homozygous for major allele)
+imp_snps[imp_snps==2] <- 3
+imp_snps[is.na(imp_snps)] <- 2
 
 files <- list.files(readcounts_dir, pattern=paste0("_", chr, "_"))
-samples <- sapply(strsplit(sapply(strsplit(files, "sample"), "[", 2), "_"), "[", 1)
-mb_ids <- paste0("DO-", samples)
+file.chunks.df <- str_split_fixed(files, "_", n=6)
+samples <- str_extract(files, paste0("(.*)(?=_", chr, "_)"))
+mb_ids <- paste(file.chunks.df[,1], file.chunks.df[,2], file.chunks.df[,3], sep="-")
 
 # check that all IDs with imp_snps data
 stopifnot(all(mb_ids %in% rownames(imp_snps)))
 
+# initialize output
 sample_results <- pair_results <- vector("list", length(files))
 names(sample_results) <- names(pair_results) <- mb_ids
 
@@ -29,13 +40,19 @@ for(indi in seq_along(files)) {
     readcounts <- readRDS(file.path(readcounts_dir, file))
 
     # find the reads' SNP positions in the snpinfo table
-    snpinfo_row <- match(readcounts$pos, snpinfo$pos_bp)
-
+    snpinfo_row <- match(readcounts$pos, snpinfo$pos)
+    
     # should all have been found
-    stopifnot(!any(is.na(readcounts$pos)))
+    # stopifnot(!any(is.na(snpinfo_row)))
 
-    # column in genotype file
-    imp_snps_col <- snpinfo$gencol[snpinfo_row]
+    # remove NAs
+    snpinfo_row <- snpinfo_row[!is.na(snpinfo_row)]
+    
+    # get SNP IDs since that's what's in the columns of imp_snp
+    imp_snps_col <- snpinfo$snp_id[snpinfo_row]
+    
+    # subset to SNPs present in the columns of imp_snps
+    imp_snps_col <- imp_snps_col[imp_snps_col %in% colnames(imp_snps)]
 
     # create object to contain the results for the single samples
     sample_results[[indi]] <- array(0, dim=c(nrow(imp_snps), 3, 2))
