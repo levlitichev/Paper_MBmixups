@@ -3,20 +3,12 @@ library(stringr)
 
 snpcalls_dir <- "SnpCalls"
 readcounts_dir <- "Readcounts"
-chr <- "13"
+out_dir <- "Summaries"
+chr <- "1"
 
 # load the corresponding imputed SNPs for that chromosome
 load(paste0(snpcalls_dir, "/imp_snp_", chr, ".RData")) # loads as `imp_snps`
 # snpinfo$pos_bp <- round(snpinfo$pos_Mbp * 1e6)
-
-# CRITICAL CHANGE!
-# I used allele probabilities, rather than genotype probabilities,
-# in obtain_snp_calls.R, so I need to modify my imp_snps object for it to work below:
-# -- 2 becomes 3 (homozygous for minor allele)
-# -- NA becomes 2 (heterozygous)
-# -- 1 stays as 1 (homozygous for major allele)
-imp_snps[imp_snps==2] <- 3
-imp_snps[is.na(imp_snps)] <- 2
 
 files <- list.files(readcounts_dir, pattern=paste0("_", chr, "_"))
 file.chunks.df <- str_split_fixed(files, "_", n=6)
@@ -28,7 +20,7 @@ stopifnot(all(mb_ids %in% rownames(imp_snps)))
 
 # initialize output
 sample_results <- pair_results <- vector("list", length(files))
-names(sample_results) <- names(pair_results) <- mb_ids
+names(sample_results) <- names(pair_results) <- samples
 
 for(indi in seq_along(files)) {
     cat("file", indi, "of", length(files), "\n") 
@@ -84,5 +76,5 @@ for(indi in seq_along(files)) {
 
 } # loop over MB samples
 
-saveRDS(sample_results, paste0("sample_results_chr", chr, ".rds"))
-saveRDS(pair_results, paste0("pair_results_chr", chr, ".rds"))
+saveRDS(sample_results, file.path(out_dir, paste0("sample_results_chr", chr, ".rds")))
+saveRDS(pair_results, file.path(out_dir, paste0("pair_results_chr", chr, ".rds")))
